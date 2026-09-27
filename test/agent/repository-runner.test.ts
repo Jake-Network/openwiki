@@ -77,6 +77,7 @@ const harness = vi.hoisted(() => ({
   duplicatePlanToolResults: [] as unknown[],
   filesystemTools: [] as string[][],
   finishCalls: 0,
+  finishSkippedPages: [] as string[],
   invalidPageSubmissions: 0,
   invalidPlanSubmissions: 0,
   noop: false,
@@ -489,6 +490,9 @@ vi.mock("../../src/generation/repository-run.js", () => ({
     if (harness.driftOnce && harness.finishCalls === 1) {
       return { status: "complete", sourceChanged: true };
     }
+    if (harness.finishSkippedPages.length > 0) {
+      return { status: "complete", skippedPages: harness.finishSkippedPages };
+    }
     return { status: "complete" };
   },
 }));
@@ -583,6 +587,7 @@ beforeEach(() => {
   harness.duplicatePlanToolResults = [];
   harness.filesystemTools = [];
   harness.finishCalls = 0;
+  harness.finishSkippedPages = [];
   harness.invalidPageSubmissions = 0;
   harness.invalidPlanSubmissions = 0;
   harness.noop = false;
@@ -925,6 +930,23 @@ describe("runNativeRepositoryGeneration", () => {
           event.text.includes("finalized without advancing"),
       ),
     ).toBe(true);
+  });
+
+  test("reports the pages that finalization recorded as skipped", async () => {
+    harness.planPaths = ["/openwiki/quickstart.md"];
+    harness.finishSkippedPages = ["/openwiki/quickstart.md"];
+
+    const result = await runNativeRepositoryGeneration({
+      root: "/repo",
+      mode: "update",
+      modelId: "test-model",
+      model: {} as never,
+    });
+
+    expect(result).toEqual({
+      skipped: false,
+      skippedPages: ["/openwiki/quickstart.md"],
+    });
   });
 
   test("restores and leaves a page pending when its worker does not submit", async () => {

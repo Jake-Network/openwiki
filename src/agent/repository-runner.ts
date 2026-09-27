@@ -330,6 +330,12 @@ export interface NativeRepositoryGenerationResult {
    * Whether the repository changed after planning, leaving a later update due.
    */
   sourceChanged?: true;
+
+  /**
+   * Pages whose workers ended without submitting, in plan order. Their prior
+   * content was restored and the run was recorded as interrupted.
+   */
+  skippedPages?: string[];
 }
 
 /**
@@ -389,9 +395,11 @@ export async function runNativeRepositoryGeneration(
       text: "Repository source changed while OpenWiki was running. The wiki was finalized without advancing its source checkpoint; run openwiki --update to reconcile the changes.\n",
     });
   }
-  return result.sourceChanged
-    ? { skipped: false, sourceChanged: true }
-    : { skipped: false };
+  return {
+    skipped: false,
+    ...(result.sourceChanged ? { sourceChanged: true as const } : {}),
+    ...(result.skippedPages ? { skippedPages: result.skippedPages } : {}),
+  };
 }
 
 /**

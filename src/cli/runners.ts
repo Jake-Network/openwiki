@@ -291,7 +291,7 @@ export async function runPrintCommand(
     // pre-agent step is recorded rather than only surfaced on stderr below.
     const telemetryContext: RunTelemetryContext = {};
 
-    await withRunTelemetry(
+    const result = await withRunTelemetry(
       command.command,
       runOptions,
       telemetryContext,
@@ -314,7 +314,7 @@ export async function runPrintCommand(
               )
             : command.userMessage;
 
-        await runOpenWikiAgent(
+        return runOpenWikiAgent(
           command.command,
           runtimeCwd,
           { ...runOptions, userMessage },
@@ -327,6 +327,17 @@ export async function runPrintCommand(
 
     if (text.length > 0) {
       process.stdout.write(`${text}\n`);
+    }
+
+    // A run that skipped pages is recorded as interrupted and leaves its source
+    // checkpoint in place, so scripted callers need a failing exit code.
+    const skippedPages = result?.skippedPages ?? [];
+    if (skippedPages.length > 0) {
+      process.stderr.write(
+        `OpenWiki skipped ${skippedPages.length} page(s) whose workers ended without submitting: ${skippedPages.join(", ")}. The run was recorded as interrupted; run the update again to retry them.\n`,
+      );
+      process.exitCode = 1;
+      return;
     }
 
     process.exitCode = 0;

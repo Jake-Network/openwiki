@@ -1593,14 +1593,19 @@ function sameResourceSet(
  * `.run.json` is removed last; every earlier failure leaves the run resumable.
  *
  * @param run - Active run whose ordered page queue is complete.
- * @returns Successful completion result after all durable gates pass.
+ * @returns Successful completion result after all durable gates pass, listing
+ * any skipped pages in plan order.
  */
 export async function finishRepositoryRun(
   run: ActiveRepositoryRun,
   options: {
     skippedPageSnapshots?: readonly RepositoryPageSnapshot[];
   } = {},
-): Promise<{ status: "complete"; sourceChanged?: true }> {
+): Promise<{
+  status: "complete";
+  sourceChanged?: true;
+  skippedPages?: string[];
+}> {
   const plan = run.state.plan;
   if (!plan) {
     throw new RepositoryRunError(
@@ -1712,9 +1717,13 @@ export async function finishRepositoryRun(
   // Delete this LAST. If anything above fails, begin() can reconstruct and retry.
   await removeRepositoryRunState(run.root);
 
-  return sourceChanged
-    ? { status: "complete", sourceChanged: true }
-    : { status: "complete" };
+  return {
+    status: "complete",
+    ...(sourceChanged ? { sourceChanged: true as const } : {}),
+    ...(skippedJobs.length > 0
+      ? { skippedPages: skippedJobs.map(({ path }) => path) }
+      : {}),
+  };
 }
 
 /**
