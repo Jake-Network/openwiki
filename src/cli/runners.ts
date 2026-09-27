@@ -329,12 +329,13 @@ export async function runPrintCommand(
       process.stdout.write(`${text}\n`);
     }
 
-    // A run that skipped pages is recorded as interrupted and leaves its source
-    // checkpoint in place, so scripted callers need a failing exit code.
+    // Skipped pages were never regenerated, so scripted callers need a failing
+    // exit code. Source drift also records the run as interrupted, but every
+    // planned page was written; it keeps exit code 0 and only asks for a rerun.
     const skippedPages = result?.skippedPages ?? [];
     if (skippedPages.length > 0) {
       process.stderr.write(
-        `OpenWiki skipped ${skippedPages.length} page(s) whose workers ended without submitting: ${skippedPages.join(", ")}. The run was recorded as interrupted; run the update again to retry them.\n`,
+        `OpenWiki skipped ${skippedPages.length} page(s) because their workers did not submit: ${skippedPages.join(", ")}. Those pages kept their previous content and the run was recorded as interrupted; run openwiki --update to retry them.\n`,
       );
       process.exitCode = 1;
       return;

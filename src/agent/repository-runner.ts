@@ -33,6 +33,7 @@ import {
   type RepositoryPageSnapshot,
 } from "../generation/repository-run.js";
 import type { RepositoryRunMode } from "../generation/run-state.js";
+import { getErrorMessage } from "../platform/diagnostics.js";
 import { OPENWIKI_PRODUCER_ACTOR } from "../version.js";
 import {
   AGENT_FILESYSTEM_PERMISSIONS,
@@ -345,7 +346,8 @@ export interface NativeRepositoryGenerationResult {
  * worker state survives beyond the durable core.
  *
  * @param options - Repository, model, planning context, and event consumer.
- * @returns No-op status and whether a later update remains due to source drift.
+ * @returns No-op status, whether a later update remains due to source drift,
+ * and any pages skipped because their workers did not submit.
  */
 export async function runNativeRepositoryGeneration(
   options: NativeRepositoryGenerationOptions,
@@ -926,7 +928,7 @@ async function runPageAgent(
     if (submitted) return { status: "submitted" };
     if (fatalSubmissionFailure) throw error;
     await skipRepositoryPage(run, snapshot);
-    emitDeferredPageWarning(job.path, onEvent);
+    emitDeferredPageWarning(job.path, onEvent, error);
     return { status: "skipped", snapshot, error };
   }
 
@@ -940,11 +942,18 @@ async function runPageAgent(
 function emitDeferredPageWarning(
   page: string,
   onEvent?: (event: OpenWikiRunEvent) => void,
+  error?: unknown,
 ): void {
+  // Name the worker's failure when there is one; a skipped page otherwise
+  // reaches the CLI with no trace of the provider error that caused it.
+  const cause =
+    error === undefined
+      ? "exited without submitting"
+      : `failed without submitting: ${getErrorMessage(error)}`;
   onEvent?.({
     type: "text",
     source: "main",
-    text: `${page} was restored after its worker exited without submitting. It was skipped for this update and will be reconsidered on the next update.\n`,
+    text: `${page} was restored after its worker ${cause}. It was skipped for this update and will be reconsidered on the next update.\n`,
   });
 }
 

@@ -1635,7 +1635,8 @@ export async function finishRepositoryRun(
       "Every skipped OpenWiki page job requires its original page snapshot before finish.",
     );
   }
-  const skippedPages = new Set(skippedJobs.map(({ path }) => path));
+  const skippedPagePaths = skippedJobs.map(({ path }) => path);
+  const skippedPages = new Set(skippedPagePaths);
   const sourceChangedBeforeFinish = await hasRepositorySourceChanged(run);
   const producerActorsByPage = new Map<string, string>();
   for (const [page, entry] of Object.entries(
@@ -1720,9 +1721,7 @@ export async function finishRepositoryRun(
   return {
     status: "complete",
     ...(sourceChanged ? { sourceChanged: true as const } : {}),
-    ...(skippedJobs.length > 0
-      ? { skippedPages: skippedJobs.map(({ path }) => path) }
-      : {}),
+    ...(skippedPagePaths.length > 0 ? { skippedPages: skippedPagePaths } : {}),
   };
 }
 
